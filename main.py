@@ -1,4 +1,4 @@
-import streamlit as st
+ig_prob.update_layoutst.plotly_chart(fig_prob, use_container_width=True)import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 깔끔하고 직관적인 UI 디자인을 위한 CSS 스타일 정의
+# UI 디자인을 위한 CSS 스타일 정의
 st.markdown("""
     <style>
     .main-header {
@@ -60,24 +60,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. 캐글 데이터셋 로드 및 예외 처리 (파일 미발견시 데이터 자동 생성 지원)
+# 2. 캐글 데이터셋 로드 및 예외 처리
 # ---------------------------------------------------------
 @st.cache_data
 def load_milk_data():
     """
     캐글 Milk Quality 데이터셋(milknew.csv)을 불러옵니다.
-    깃허브 리포지토리에 파일이 없더라도 앱이 중단되지 않고
-    동일한 데이터 구조(1,059개 샘플 및 8개 속성)의 합성 데모 데이터를 자동 생성합니다.
+    파일이 없더라도 데모 데이터를 자동 생성하여 앱 오류를 방지합니다.
     """
     file_name = "milknew.csv"
     try:
         df = pd.read_csv(file_name)
-        # 캐글 컬럼명 오타 대응 (Temprature -> Temperature)
         if 'Temprature' in df.columns:
             df.rename(columns={'Temprature': 'Temperature'}, inplace=True)
-        st.sidebar.success("✅ 'milknew.csv' 로드 완료")
+        st.sidebar.success("✅ 'milknew.csv' 데이터 로드 완료")
     except Exception:
-        st.sidebar.warning("⚠️ 'milknew.csv' 파일 미발견: 캐글 스펙과 일치하는 샘플 데이터를 자동 생성했습니다.")
+        st.sidebar.warning("⚠️ 'milknew.csv' 미발견: 샘플 데이터를 자동 생성하여 동작합니다.")
         np.random.seed(42)
         n_samples = 1059
         
@@ -109,32 +107,27 @@ def load_milk_data():
             'Grade': grades
         })
     
-    # Grade 범주 소문자/대문자 통일 (High, Medium, Low)
     df['Grade'] = df['Grade'].astype(str).str.capitalize()
     return df
 
 @st.cache_resource
 def train_random_forest_model(df):
     """
-    Kaggle milknew.csv 데이터를 바탕으로 Random Forest 머신러닝 분류 모델을 학습시키고 평가 지표를 반환합니다.
+    Random Forest 머신러닝 분류 모델을 학습시키고 평가 지표를 반환합니다.
     """
     feature_cols = ['pH', 'Temperature', 'Taste', 'Odor', 'Fat', 'Turbidity', 'Colour']
     X = df[feature_cols]
     y = df['Grade']
 
-    # 학습셋 및 테스트셋 분할 (8:2 비율, Stratified Split 적용)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    # 머신러닝 분류 모델 생성 및 학습
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
-    # 테스트셋 평가
     y_pred = model.predict(X_test)
     
-    # 평가지표 산출 (Macro Average)
     acc = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred, average='macro', zero_division=0)
     rec = recall_score(y_test, y_pred, average='macro', zero_division=0)
@@ -393,9 +386,4 @@ elif menu == "4. 실시간 우유 품질 예측기":
                 y='Probability (%)',
                 color='Grade',
                 title="각 등급별 예측 확률 값 (%)",
-                text='Probability (%)',
-                color_discrete_map={'High': '#10B981', 'Medium': '#F59E0B', 'Low': '#EF4444'}
-            )
-            fig_prob.update_layout(yaxis_range=[0, 100])
-            st.plotly_chart(fig_prob, use_container_width=True)
-```
+                            x='Grade',
