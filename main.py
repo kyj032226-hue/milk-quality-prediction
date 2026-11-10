@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -61,29 +60,63 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. 캐글 데이터셋 데이터 로드 및 모델 학습 (캐싱 처리)
+# 2. 캐글 데이터셋 로드 및 예외 처리 (파일 미발견시 데이터 자동 생성 지원)
 # ---------------------------------------------------------
 @st.cache_data
 def load_milk_data():
     """
-    캐글 Milk Quality 데이터셋(milknew.csv)을 로드합니다.
+    캐글 Milk Quality 데이터셋(milknew.csv)을 불러옵니다.
+    깃허브 리포지토리에 파일이 없더라도 앱이 중단되지 않고
+    동일한 데이터 구조(1,059개 샘플 및 8개 속성)의 합성 데모 데이터를 자동 생성합니다.
     """
+    file_name = "milknew.csv"
     try:
-        df = pd.read_csv("milknew.csv")
-    except FileNotFoundError:
-        st.error("⚠️ 'milknew.csv' 데이터 파일을 찾을 수 없습니다. GitHub 저장소에 milknew.csv 파일이 포함되어 있는지 확인해 주세요.")
-        st.stop()
-    
-    # 데이터 컬럼명 오타 대응 (Temprature -> Temperature)
-    if 'Temprature' in df.columns:
-        df.rename(columns={'Temprature': 'Temperature'}, inplace=True)
+        df = pd.read_csv(file_name)
+        # 캐글 컬럼명 오타 대응 (Temprature -> Temperature)
+        if 'Temprature' in df.columns:
+            df.rename(columns={'Temprature': 'Temperature'}, inplace=True)
+        st.sidebar.success("✅ 'milknew.csv' 로드 완료")
+    except Exception:
+        st.sidebar.warning("⚠️ 'milknew.csv' 파일 미발견: 캐글 스펙과 일치하는 샘플 데이터를 자동 생성했습니다.")
+        np.random.seed(42)
+        n_samples = 1059
         
+        ph = np.round(np.random.choice([3.0, 4.5, 5.5, 6.4, 6.5, 6.6, 6.7, 6.8, 8.5, 9.5], n_samples, p=[0.05, 0.05, 0.1, 0.1, 0.2, 0.2, 0.15, 0.1, 0.025, 0.025]), 1)
+        temp = np.random.choice([34, 35, 36, 37, 38, 40, 45, 50, 55, 65, 70, 90], n_samples)
+        taste = np.random.choice([0, 1], n_samples, p=[0.45, 0.55])
+        odor = np.random.choice([0, 1], n_samples, p=[0.6, 0.4])
+        fat = np.random.choice([0, 1], n_samples, p=[0.33, 0.67])
+        turb = np.random.choice([0, 1], n_samples, p=[0.53, 0.47])
+        colour = np.random.choice([240, 245, 250, 255], n_samples, p=[0.1, 0.2, 0.3, 0.4])
+        
+        grades = []
+        for i in range(n_samples):
+            if ph[i] < 6.4 or ph[i] > 6.8 or temp[i] >= 45 or odor[i] == 1:
+                grades.append("low")
+            elif turb[i] == 1 or taste[i] == 0:
+                grades.append("medium")
+            else:
+                grades.append("high")
+
+        df = pd.DataFrame({
+            'pH': ph,
+            'Temperature': temp,
+            'Taste': taste,
+            'Odor': odor,
+            'Fat': fat,
+            'Turbidity': turb,
+            'Colour': colour,
+            'Grade': grades
+        })
+    
+    # Grade 범주 소문자/대문자 통일 (High, Medium, Low)
+    df['Grade'] = df['Grade'].astype(str).str.capitalize()
     return df
 
 @st.cache_resource
 def train_random_forest_model(df):
     """
-    우유 품질 데이터를 바탕으로 Random Forest 모델을 학습시키고 평가 지표를 반환합니다.
+    Kaggle milknew.csv 데이터를 바탕으로 Random Forest 머신러닝 분류 모델을 학습시키고 평가 지표를 반환합니다.
     """
     feature_cols = ['pH', 'Temperature', 'Taste', 'Odor', 'Fat', 'Turbidity', 'Colour']
     X = df[feature_cols]
@@ -116,7 +149,7 @@ model, X_test, y_test, y_pred, acc, prec, rec, f1, feature_cols = train_random_f
 # ---------------------------------------------------------
 # 3. 사이드바 메뉴 구성
 # ---------------------------------------------------------
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3050/3050158.png", width=80)
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3050/3050158.png", width=75)
 st.sidebar.title("🧪 메뉴 선택")
 menu = st.sidebar.radio(
     "원하는 탐색 단계를 선택하세요:",
@@ -129,7 +162,7 @@ menu = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("📌 **데이터 출처**: Kaggle - Milk Quality Prediction")
+st.sidebar.caption("📌 **데이터 출처**: Kaggle Milk Quality Prediction")
 
 # ---------------------------------------------------------
 # 4. 메뉴별 화면 구현
@@ -148,7 +181,7 @@ if menu == "1. 프로젝트 개요 & 데이터":
         <div class="card">
             <h3>🎯 프로젝트 목표 및 배경</h3>
             <ul>
-                <li><b>식품생명공학적 관점 접근</b>: 우유의 보관 온도 상승 시 미생물 증식으로 인한 산도(pH) 변화, 단백질 변성에 따른 탁도 변화 등 물리화학적 특성을 종합 분석합니다.</li>
+                <li><b>식품생명공학적 관점 접근</b>: 보관 온도 상승 시 미생물 증식으로 인한 산도(pH) 변화, 단백질 변성에 따른 탁도 변화 등 물리화학적 특성을 종합 분석합니다.</li>
                 <li><b>자동 분류 모델 구현</b>: 7가지 핵심 독립 변수를 바탕으로 우유의 최종 신선도 품질 등급(<code>High</code>, <code>Medium</code>, <code>Low</code>)을 정밀 예측합니다.</li>
                 <li><b>현장 실용성 확보</b>: 유통 및 보관 환경에서 센서 데이터를 입력해 신속히 등급을 판단할 수 있는 인터페이스를 제공합니다.</li>
             </ul>
@@ -158,21 +191,21 @@ if menu == "1. 프로젝트 개요 & 데이터":
     with col2:
         st.markdown("""
         <div class="card">
-            <h3>📌 수집 데이터 속성 (7개 독립변수 + 1개 종속변수)</h3>
+            <h3>📌 캐글 수집 데이터 속성 (7개 독립변수 + 1개 종속변수)</h3>
             <ul>
-                <li><b>pH</b>: 우유의 수소이온농도 (정상 우유 약 6.5~6.7)</li>
-                <li><b>Temperature</b>: 우유 보관 및 측정 온도 (℃)</li>
+                <li><b>pH</b>: 우유의 수소이온농도 (실수형 숫자, 정상 범주 약 6.5~6.7)</li>
+                <li><b>Temperature</b>: 우유 보관 및 측정 온도 (섭씨 단위 숫자)</li>
                 <li><b>Taste</b>: 우유의 맛 검사 결과 (0: 정상, 1: 이상)</li>
                 <li><b>Odor</b>: 우유의 냄새/악취 검사 결과 (0: 정상, 1: 변질/악취)</li>
                 <li><b>Fat</b>: 우유의 지방 함량 상태 (0: 낮음, 1: 정상/높음)</li>
-                <li><b>Turbidity</b>: 우유 탁도/혼탁도 (0: 투명/정상, 1: 혼탁/단백질 응집)</li>
-                <li><b>Colour</b>: 우유 색상 수치 (240 ~ 255)</li>
-                <li><b>Grade (타겟)</b>: 우유 품질 등급 (<code>High</code> / <code>Medium</code> / <code>Low</code>)</li>
+                <li><b>Turbidity</b>: 우유 탁도 상태 (0: 투명/정상, 1: 혼탁/응집)</li>
+                <li><b>Colour</b>: 우유 색상 수치 (240 ~ 255 범위 숫자)</li>
+                <li><b>Grade (종속 변수)</b>: 우유 최종 품질 등급 (<code>High</code> / <code>Medium</code> / <code>Low</code>)</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
 
-    st.subheader("📋 수집 데이터셋 미리보기 (Kaggle milknew.csv)")
+    st.subheader("📋 데이터셋 미리보기 (Kaggle milknew.csv)")
     st.dataframe(df.head(10), use_container_width=True)
 
     col_stat1, col_stat2, col_stat3 = st.columns(3)
@@ -206,7 +239,7 @@ elif menu == "2. 데이터 탐색적 분석 (EDA)":
         fig_scatter.update_layout(xaxis_title="pH (산도)", yaxis_title="보관 온도 (℃)")
         st.plotly_chart(fig_scatter, use_container_width=True)
 
-        st.info("💡 **인사이트 해석**: 정상적 pH 범주(6.5~6.7)를 벗어나 6.2 이하로 떨어지거나, 온도가 45℃ 이상 높은 고온 환경에 노출될 경우 우유 변질로 인해 `Low` 등급으로 분류되는 비율이 현저히 높아집니다.")
+        st.info("💡 **인사이트 해석**: 정상적 pH 범주(6.5~6.7)를 벗어나 6.4 이하로 떨어지거나, 보관 온도가 45℃ 이상 고온 환경에 노출될 경우 우유 변질로 인해 `Low` 등급으로 분류되는 비율이 현저히 높아집니다.")
 
     with tab2:
         st.subheader("② 탁도(Turbidity) 및 관능 지표(Odor/Taste)와 품질 등급")
@@ -307,7 +340,7 @@ elif menu == "4. 실시간 우유 품질 예측기":
         st.markdown("#### 🌡️ 연속형 물리/화학적 지표")
         in_ph = st.slider("1. pH (수소이온농도)", min_value=3.0, max_value=9.5, value=6.6, step=0.1, help="정상 우유의 수소이온농도는 6.5~6.7 수준입니다.")
         in_temp = st.slider("2. 보관 및 측정 온도 (℃)", min_value=34, max_value=90, value=38, step=1, help="우유의 보관 및 측정 시 온도 값입니다.")
-        in_colour = st.slider("3. 우유 색상 수치 (Colour)", min_value=240, max_value=255, value=255, step=1, help="색상 스펙트럼 수치입니다.")
+        in_colour = st.slider("3. 우유 색상 수치 (Colour)", min_value=240, max_value=255, value=255, step=1, help="색상 스펙트럼 수치입니다 (240~255).")
 
     with col_input2:
         st.markdown("#### 🔬 범주형 관능 및 상태 지표")
@@ -343,7 +376,7 @@ elif menu == "4. 실시간 우유 품질 예측기":
                 st.warning("### 🟡 최종 등급: Medium (보통 품질)")
                 st.markdown("""
                 - **신선도 상태**: 주의 필요 (경계 단계)
-                - **조치 사항**: 보관 온도를 재 점검하고 빠른 소비를 권장합니다.
+                - **조치 사항**: 보관 온도를 재점검하고 빠른 소비를 권장합니다.
                 """)
             else:
                 st.error("### 🔴 최종 등급: Low (변질/저품질)")
@@ -365,3 +398,4 @@ elif menu == "4. 실시간 우유 품질 예측기":
             )
             fig_prob.update_layout(yaxis_range=[0, 100])
             st.plotly_chart(fig_prob, use_container_width=True)
+```
