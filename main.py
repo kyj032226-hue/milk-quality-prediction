@@ -1,4 +1,4 @@
-ig_prob.update_layoutst.plotly_chart(fig_prob, use_container_width=True)import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -386,4 +386,8 @@ elif menu == "4. 실시간 우유 품질 예측기":
                 y='Probability (%)',
                 color='Grade',
                 title="각 등급별 예측 확률 값 (%)",
-                            x='Grade',
+                text='Probability (%)',
+                color_discrete_map={'High': '#10B981', 'Medium': '#F59E0B', 'Low': '#EF4444'}
+            )
+            fig_prob.update_layout(yaxis_range=[0, 100])
+            st.plotly_chart(fig_prob, use_container_width=True)
