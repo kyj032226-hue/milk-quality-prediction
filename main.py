@@ -34,16 +34,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. 데이터 로드 함수 (컬럼명 자동 정돈 및 유연성 확보)
+# 2. 데이터 로드 함수
 # ---------------------------------------------------------
 @st.cache_data
 def load_and_clean_data():
     try:
         df = pd.read_csv("milknew.csv")
-        # 컬럼 이름 양쪽 공백 제거
         df.columns = df.columns.str.strip()
         
-        # 캐글 데이터의 흔한 온도 컬럼 오타(Temprature -> Temperature) 자동 보정
         if 'Temprature' in df.columns and 'Temperature' not in df.columns:
             df = df.rename(columns={'Temprature': 'Temperature'})
             
@@ -67,25 +65,20 @@ def load_and_clean_data():
 df = load_and_clean_data()
 
 # ---------------------------------------------------------
-# 3. 모델 학습 함수 (존재하는 컬럼을 동적으로 매핑)
+# 3. 모델 학습 함수
 # ---------------------------------------------------------
 @st.cache_resource
 def train_random_forest_model(dataframe):
-    # 실제 존재하는 컬럼 중 모델에 필요한 속성들만 안전하게 추출
     possible_features = ['pH', 'Temperature', 'Temprature', 'Taste', 'Odor', 'Fat', 'Turbidity', 'Colour']
     feature_cols = [col for col in possible_features if col in dataframe.columns]
     
-    # 만약 Temperature 관련 컬럼이 다르게 되어있다면 강제 지정
     if 'Temperature' not in feature_cols and 'Temprature' in dataframe.columns:
         feature_cols = ['pH' if c=='Temprature' else c for c in feature_cols]
 
     X = dataframe[feature_cols]
-    
-    # 종속변수 Grade 컬럼 찾기
     grade_col = 'Grade' if 'Grade' in dataframe.columns else dataframe.columns[-1]
     y = dataframe[grade_col]
 
-    # 범주형(문자열) 등급을 숫자 혹은 그대로 학습 (RandomForest는 문자열 분류도 지원)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     model = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -94,7 +87,6 @@ def train_random_forest_model(dataframe):
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     
-    # 평균 계산법 설정 (클래스 개수에 유연하게 대응)
     average_type = 'macro' if len(y.unique()) > 2 else 'binary'
     prec = precision_score(y_test, y_pred, average=average_type, zero_division=0)
     rec = recall_score(y_test, y_pred, average=average_type, zero_division=0)
@@ -157,7 +149,7 @@ elif menu == "2. 데이터 탐색 (EDA)":
                 labels={temp_col_name: '온도(℃)', 'pH': 'pH'}
             )
             st.plotly_chart(fig1, use_container_width=True)
-        st.info("💡 **인사이트**: 산도(pH) 및 보관 온도 변화에 따른 품질 등급 간의 뚜렷한 경향성이 관찰됩니다.")
+        st.info("💡 산도(pH) 및 보관 온도 변화에 따른 품질 등급 간의 뚜렷한 경향성이 관찰됩니다.")
 
     with tab2:
         st.subheader("② 탁도 및 관능 지표와 품질 간 연관성")
@@ -220,7 +212,6 @@ elif menu == "4. 실시간 우유 품질 예측기":
     st.divider()
 
     if st.button("🚀 우유 품질 등급 예측하기", use_container_width=True):
-        # 동적으로 입력값 구성
         input_dict = {}
         for col in feature_cols:
             if col == 'pH': input_dict[col] = input_ph
@@ -241,13 +232,8 @@ elif menu == "4. 실시간 우유 품질 예측기":
         st.subheader("💡 예측 결과 판정")
         st.success(f"🎉 예측된 우유 품질 등급은 **[{prediction}]** 입니다!")
 
-        # 확률 그래프 시각화
         proba_df = pd.DataFrame({'Grade': classes, 'Probability': proba * 100})
         fig_prob = px.bar(proba_df, x='Grade', y='Probability', color='Grade',
                           title="등급별 예측 확률 (%)", text_auto='.1f',
                           color_discrete_sequence=px.colors.qualitative.Set2)
         st.plotly_chart(fig_prob, use_container_width=True)
-💡 요약
-GitHub에 업로드된 milknew.csv 파일의 컬럼명 대소문자나 공백 차이로 인해 발생했던 오류를 코드가 자동으로 검출하고 맞춰서 읽어오도록 수정되었습니다.
-
-위 코드로 main.py를 교체해주시면 에러 없이 매끄럽게 작동합니다!
